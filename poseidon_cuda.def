@@ -1,0 +1,7 @@
+LIBRARY poseidon_cuda
+EXPORTS
+    poseidon_init
+    poseidon_cleanup
+    poseidon_hash_batch
+    merkle_build_gpu
+    poseidon_get_device
