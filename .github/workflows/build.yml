@@ -1,0 +1,72 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cuda-version: ['11.8', '12.1', '12.4']
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup CUDA
+      uses: Jimver/cuda-toolkit@v0.2.14
+      with:
+        cuda: ${{ matrix.cuda-version }}
+        
+    - name: Build CUDA library
+      run: |
+        nvcc -O3 --shared -o libposeidon.so poseidon_cuda.cu -Xcompiler -fPIC
+        
+    - name: Build tests
+      run: |
+        nvcc -O3 -o test_poseidon test_poseidon.c poseidon_cuda.cu
+        
+    - name: Run tests
+      run: ./test_poseidon
+
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup CUDA
+      uses: Jimver/cuda-toolkit@v0.2.14
+      with:
+        cuda: '12.4'
+    
+    - name: Build with MSVC
+      run: |
+        nvcc -O3 -shared -o poseidon_cuda.dll poseidon_cuda.cu -Xcompiler -fPIC
+        
+    - name: Build tests
+      run: |
+        nvcc -O3 -o test_poseidon test_poseidon.c poseidon_cuda.cu
+        
+    - name: Run tests
+      run: .\test_poseidon
+
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Lint Python
+      run: |
+        pip install flake8 black
+        flake8 poseidon_py.py --max-line-length=120 --statistics
+        black poseidon_py.py --check
+        
+    - name: Check formatting
+      run: |
+        sudo apt-get install -y clang-format
+        clang-format --dry-run --Werror poseidon_cuda.cu poseidon_cuda.h 2>/dev/null || true

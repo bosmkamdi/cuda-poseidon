@@ -1,9 +1,39 @@
+# Build artifacts
+*.o
 *.obj
-*.lib
-*.dll
-*.exp
 *.exe
+*.dll
+*.so
+*.lib
+*.exp
 *.pdb
 *.ilk
+
+# CUDA
+*.cubin
+*.fatbin
+*.ptx
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Test outputs
+test_output/
+*.log
