@@ -10,36 +10,11 @@ permissions:
 jobs:
   create-release:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          release_name: ${{ github.ref_name }}
-          body: |
-            ## What's Changed
-
-            See the [Changelog](https://bosmkamdi.github.io/cuda-poseidon/changelog/) for full details.
-
-            ## Quick Start
-
-            ```bash
-            # Docker
-            docker pull ghcr.io/bosmkamdi/cuda-poseidon:${{ github.ref_name }}
-
-            # Build from source
-            git checkout ${{ github.ref_name }}
-            nvcc -O3 --shared -o libposeidon_cuda.so poseidon_cuda.cu -Xcompiler -fPIC
-            ```
-
-            ## Documentation
-
-            📖 [bosmkamdi.github.io/cuda-poseidon](https://bosmkamdi.github.io/cuda-poseidon/)
-          draft: false
-          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') }}
+          generate_release_notes: true
+          make_latest: true

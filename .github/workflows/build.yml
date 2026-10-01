@@ -18,74 +18,32 @@ jobs:
 
       - name: Validate project structure
         run: |
-          echo "Validating project files..."
-          test -f poseidon_cuda.cu && echo "  poseidon_cuda.cu: OK"
-          test -f poseidon_cuda.h && echo "  poseidon_cuda.h: OK"
-          test -f poseidon_fields.h && echo "  poseidon_fields.h: OK"
-          test -f poseidon_py.py && echo "  poseidon_py.py: OK"
-          test -f test_poseidon.c && echo "  test_poseidon.c: OK"
-          test -f Dockerfile && echo "  Dockerfile: OK"
-          test -f bench/bench.py && echo "  bench/bench.py: OK"
-          test -f mkdocs.yml && echo "  mkdocs.yml: OK"
+          test -f poseidon_cuda.cu && echo "poseidon_cuda.cu: OK"
+          test -f poseidon_cuda.h && echo "poseidon_cuda.h: OK"
+          test -f poseidon_fields.h && echo "poseidon_fields.h: OK"
+          test -f poseidon_py.py && echo "poseidon_py.py: OK"
+          test -f test_poseidon.c && echo "test_poseidon.c: OK"
+          test -f Dockerfile && echo "Dockerfile: OK"
+          test -f bench/bench.py && echo "bench/bench.py: OK"
+          test -f mkdocs.yml && echo "mkdocs.yml: OK"
 
       - name: Python syntax check
         run: |
           python3 -c "import py_compile; py_compile.compile('poseidon_py.py', doraise=True)"
-          echo "  poseidon_py.py: Python syntax OK"
           python3 -c "import py_compile; py_compile.compile('bench/bench.py', doraise=True)"
-          echo "  bench/bench.py: Python syntax OK"
+          echo "Python syntax: OK"
 
-      - name: Run CPU reference benchmark
-        run: |
-          python3 -c "
-import time, random
-
-PRIME32 = 0xFFFFFFFB
-
-def mod_mul(a, b):
-    return (a * b) % PRIME32
-
-def mod_pow7(x):
-    x2 = mod_mul(x, x)
-    x4 = mod_mul(x2, x2)
-    x6 = mod_mul(x4, x2)
-    return mod_mul(x6, x)
-
-RC = [0x43e1f593 % PRIME32, 0x2833e848 % PRIME32,
-      0xb85045b6 % PRIME32, 0x30644e72 % PRIME32,
-      0x0c4cd6c5 % PRIME32, 0x1cdfd027 % PRIME32,
-      0x2090bbff % PRIME32, 0x3a43df9d % PRIME32]
-
-def hash_cpu(a, b, rounds=8):
-    s0, s1 = a, b
-    for r in range(rounds):
-        s0 = mod_pow7(s0)
-        s1 = mod_pow7(s1)
-        tmp = s0
-        s0 = (s0 + s1 + RC[r % 8]) % PRIME32
-        s1 = (tmp + s1) % PRIME32
-    return s0, s1
-
-n = 1000
-pairs = [(random.getrandbits(30), random.getrandbits(30)) for _ in range(n)]
-start = time.perf_counter()
-for _ in range(10):
-    for a, b in pairs:
-        hash_cpu(a, b)
-elapsed = (time.perf_counter() - start) / 10
-hps = n / elapsed
-print(f'  CPU hash reference: {hps:,.0f} hashes/sec ({elapsed*1000:.1f} ms)')
-"
+      - name: CPU reference benchmark
+        run: python3 scripts/ci_bench_cpu.py
 
       - name: Check CUDA availability
         run: |
           if command -v nvcc &> /dev/null; then
-            echo "  CUDA toolkit found: $(nvcc --version | grep release)"
+            echo "CUDA found: $(nvcc --version | grep release)"
             nvcc -O3 --shared -o libposeidon_cuda.so poseidon_cuda.cu -Xcompiler -fPIC
-            echo "  CUDA build: OK"
+            echo "CUDA build: OK"
           else
-            echo "  CUDA toolkit not available on this runner. Skipping GPU build."
-            echo "  Note: Build on your local machine with: nvcc -O3 --shared -o libposeidon_cuda.so poseidon_cuda.cu -Xcompiler -fPIC"
+            echo "CUDA not available, skipping GPU build"
           fi
 
   build-windows:
@@ -96,21 +54,20 @@ print(f'  CPU hash reference: {hps:,.0f} hashes/sec ({elapsed*1000:.1f} ms)')
       - name: Verify project files
         shell: pwsh
         run: |
-          Write-Output "Checking project structure..."
-          if (Test-Path poseidon_cuda.cu) { Write-Output "  poseidon_cuda.cu: OK" }
-          if (Test-Path poseidon_cuda.h) { Write-Output "  poseidon_cuda.h: OK" }
-          if (Test-Path poseidon_py.py) { Write-Output "  poseidon_py.py: OK" }
+          if (Test-Path poseidon_cuda.cu) { Write-Output "poseidon_cuda.cu: OK" }
+          if (Test-Path poseidon_cuda.h) { Write-Output "poseidon_cuda.h: OK" }
+          if (Test-Path poseidon_py.py) { Write-Output "poseidon_py.py: OK" }
 
       - name: Check CUDA availability
         shell: pwsh
         run: |
           $nvcc = Get-Command nvcc -ErrorAction SilentlyContinue
           if ($nvcc) {
-              Write-Output "  CUDA found: $($nvcc.Source)"
+              Write-Output "CUDA found: $($nvcc.Source)"
               nvcc -O3 -shared -o poseidon_cuda.dll poseidon_cuda.cu
-              Write-Output "  CUDA build: OK"
+              Write-Output "CUDA build: OK"
           } else {
-              Write-Output "  CUDA toolkit not available. Skipping GPU build."
+              Write-Output "CUDA not available, skipping"
           }
 
   code-quality:
@@ -120,18 +77,16 @@ print(f'  CPU hash reference: {hps:,.0f} hashes/sec ({elapsed*1000:.1f} ms)')
 
       - name: Check file structure
         run: |
-          echo "Validating project files..."
-          test -f poseidon_cuda.cu && echo "  poseidon_cuda.cu: OK"
-          test -f poseidon_cuda.h && echo "  poseidon_cuda.h: OK"
-          test -f poseidon_fields.h && echo "  poseidon_fields.h: OK"
-          test -f poseidon_py.py && echo "  poseidon_py.py: OK"
-          test -f test_poseidon.c && echo "  test_poseidon.c: OK"
-          test -f Dockerfile && echo "  Dockerfile: OK"
-          test -f bench/bench.py && echo "  bench/bench.py: OK"
+          test -f poseidon_cuda.cu && echo "poseidon_cuda.cu: OK"
+          test -f poseidon_cuda.h && echo "poseidon_cuda.h: OK"
+          test -f poseidon_fields.h && echo "poseidon_fields.h: OK"
+          test -f poseidon_py.py && echo "poseidon_py.py: OK"
+          test -f test_poseidon.c && echo "test_poseidon.c: OK"
+          test -f Dockerfile && echo "Dockerfile: OK"
+          test -f bench/bench.py && echo "bench/bench.py: OK"
 
       - name: Python syntax check
         run: |
           python3 -c "import py_compile; py_compile.compile('poseidon_py.py', doraise=True)"
-          echo "  poseidon_py.py: syntax OK"
           python3 -c "import py_compile; py_compile.compile('bench/bench.py', doraise=True)"
-          echo "  bench/bench.py: syntax OK"
+          echo "Python syntax: OK"
