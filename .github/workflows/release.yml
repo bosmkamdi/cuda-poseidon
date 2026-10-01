@@ -6,13 +6,10 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
   create-release:
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -28,47 +25,21 @@ jobs:
           body: |
             ## What's Changed
 
-            See the [Changelog](https://bosmkamdi.github.io/cuda-poseidon/changelog/) for detailed updates.
+            See the [Changelog](https://bosmkamdi.github.io/cuda-poseidon/changelog/) for full details.
 
-            ## Assets
+            ## Quick Start
 
-            - `poseidon_cuda.cu` — CUDA kernel source
-            - `poseidon_cuda.h` — C/C++ header
-            - `poseidon_py.py` — Python bindings
-            - Docker image: `ghcr.io/bosmkamdi/cuda-poseidon:${{ github.ref_name }}`
+            ```bash
+            # Docker
+            docker pull ghcr.io/bosmkamdi/cuda-poseidon:${{ github.ref_name }}
+
+            # Build from source
+            git checkout ${{ github.ref_name }}
+            nvcc -O3 --shared -o libposeidon_cuda.so poseidon_cuda.cu -Xcompiler -fPIC
+            ```
+
+            ## Documentation
+
+            📖 [bosmkamdi.github.io/cuda-poseidon](https://bosmkamdi.github.io/cuda-poseidon/)
           draft: false
           prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') }}
-
-  build-artifacts:
-    needs: create-release
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        cuda-version: ['11.8', '12.4']
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup CUDA
-        uses: Jimver/cuda-toolkit@v0.2.14
-        with:
-          cuda: ${{ matrix.cuda-version }}
-
-      - name: Build for CUDA ${{ matrix.cuda-version }}
-        run: |
-          nvcc -O3 --use_fast_math \
-            -gencode arch=compute_70,code=sm_70 \
-            -gencode arch=compute_80,code=sm_80 \
-            -gencode arch=compute_90,code=sm_90 \
-            --shared -o libposeidon_cuda_cu${{ matrix.cuda-version }}.so \
-            poseidon_cuda.cu -Xcompiler -fPIC
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: libposeidon_cuda_cu${{ matrix.cuda-version }}.so
-          asset_name: libposeidon_cuda_cu${{ matrix.cuda-version }}.so
-          asset_content_type: application/octet-stream

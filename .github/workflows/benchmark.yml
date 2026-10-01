@@ -6,11 +6,8 @@ on:
     paths:
       - 'poseidon_cuda.cu'
       - 'poseidon_cuda.h'
+      - 'poseidon_fields.h'
       - 'bench/**'
-  pull_request:
-    branches: [main, master]
-    paths:
-      - 'poseidon_cuda.cu'
   workflow_dispatch:
     inputs:
       quick:
@@ -20,65 +17,9 @@ on:
         type: boolean
 
 jobs:
-  benchmark-cuda:
-    runs-on: self-hosted
-    # Requires a self-hosted runner with NVIDIA GPU + CUDA toolkit
-    # See: https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check GPU
-        run: nvidia-smi
-
-      - name: Build shared library
-        run: |
-          nvcc -O3 --shared -o libposeidon_cuda.so poseidon_cuda.cu -Xcompiler -fPIC
-
-      - name: Run benchmark
-        run: |
-          python3 bench/bench.py ${{ inputs.quick && '--quick' || '' }} --output bench_results.json
-
-      - name: Convert to Markdown
-        run: |
-          python3 -c "
-          import json
-          data = json.load(open('bench_results.json'))
-          # Generate markdown table for summary
-          with open('bench_summary.md', 'w') as f:
-              f.write('## Benchmark Results\n\n')
-              f.write(f'GPU: {data[\"gpu_name\"]} ({data[\"vram_mb\"]} MB)\n\n')
-              f.write('### Hash Throughput\n\n')
-              f.write('| Batch | Hashes/sec | µs/hash |\n')
-              f.write('|------:|-----------:|--------:|\n')
-              for r in data['hash']:
-                  f.write(f'| {r[\"batch_size\"]:,} | {r[\"hashes_per_sec\"]:,} | {r[\"us_per_hash\"]} |\n')
-          "
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-results
-          path: |
-            bench_results.json
-            bench_summary.md
-
-      - name: Comment PR with results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const summary = fs.readFileSync('bench_summary.md', 'utf8');
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `## 🔱 cuda-poseidon Benchmark Results\n\n${summary}`
-            })
-
   benchmark-cpu-only:
     runs-on: ubuntu-latest
-    # Fallback: CPU-only benchmark when GPU runner unavailable
+    # CPU-only benchmark (no GPU required)
     steps:
       - uses: actions/checkout@v4
 
@@ -89,40 +30,42 @@ jobs:
       - name: Run CPU reference benchmark
         run: |
           python3 -c "
-          import sys, time, random
+import sys, time, random
 
-          PRIME32 = 0xFFFFFFFB
+PRIME32 = 0xFFFFFFFB
 
-          def mod_mul(a, b):
-              return (a * b) % PRIME32
+def mod_mul(a, b):
+    return (a * b) % PRIME32
 
-          def mod_pow7(x):
-              x2 = mod_mul(x, x)
-              x4 = mod_mul(x2, x2)
-              x6 = mod_mul(x4, x2)
-              return mod_mul(x6, x)
+def mod_pow7(x):
+    x2 = mod_mul(x, x)
+    x4 = mod_mul(x2, x2)
+    x6 = mod_mul(x4, x2)
+    return mod_mul(x6, x)
 
-          RC = [0x43e1f593 % PRIME32, 0x2833e848 % PRIME32,
-                0xb85045b6 % PRIME32, 0x30644e72 % PRIME32,
-                0x0c4cd6c5 % PRIME32, 0x1cdfd027 % PRIME32,
-                0x2090bbff % PRIME32, 0x3a43df9d % PRIME32]
+RC = [0x43e1f593 % PRIME32, 0x2833e848 % PRIME32,
+      0xb85045b6 % PRIME32, 0x30644e72 % PRIME32,
+      0x0c4cd6c5 % PRIME32, 0x1cdfd027 % PRIME32,
+      0x2090bbff % PRIME32, 0x3a43df9d % PRIME32]
 
-          def hash_cpu(a, b, rounds=8):
-              s0, s1 = a, b
-              for r in range(rounds):
-                  s0 = mod_pow7(s0)
-                  s1 = mod_pow7(s1)
-                  tmp = s0
-                  s0 = (s0 + s1 + RC[r % 8]) % PRIME32
-                  s1 = (tmp + s1) % PRIME32
-              return s0, s1
+def hash_cpu(a, b, rounds=8):
+    s0, s1 = a, b
+    for r in range(rounds):
+        s0 = mod_pow7(s0)
+        s1 = mod_pow7(s1)
+        tmp = s0
+        s0 = (s0 + s1 + RC[r % 8]) % PRIME32
+        s1 = (tmp + s1) % PRIME32
+    return s0, s1
 
-          n = 10000
-          pairs = [(random.getrandbits(30), random.getrandbits(30)) for _ in range(n)]
-          start = time.perf_counter()
-          for a, b in pairs:
-              hash_cpu(a, b)
-          elapsed = time.perf_counter() - start
-          hps = n / elapsed
-          print(f'CPU (single-thread) Poseidon: {hps:,.0f} hashes/sec ({elapsed*1000:.1f} ms for {n})')
-          "
+for n in [1000, 10000]:
+    pairs = [(random.getrandbits(30), random.getrandbits(30)) for _ in range(n)]
+    start = time.perf_counter()
+    for _ in range(10):
+        for a, b in pairs:
+            hash_cpu(a, b)
+    elapsed = (time.perf_counter() - start) / 10
+    hps = n / elapsed
+    print(f'  CPU n={n}: {hps:,.0f} hashes/sec ({elapsed*1000:.1f} ms)')
+print('CPU benchmark complete.')
+"

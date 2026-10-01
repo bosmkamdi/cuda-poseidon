@@ -33,21 +33,16 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install MkDocs and plugins
+      - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install \
-            mkdocs-material \
-            mkdocs-minify-plugin \
-            mkdocs-git-revision-date-localized-plugin \
-            pymdown-extensions \
-            mkdocs-material-extensions
+          pip install mkdocs-material mkdocs-minify-plugin mkdocs-git-revision-date-localized-plugin pymdown-extensions
 
       - name: Build documentation
-        run: |
-          mkdir -p docs/assets
-          mkdocs build --strict --verbose
-          ls -la site/
+        run: mkdocs build --strict
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
 
       - uses: actions/upload-pages-artifact@v3
         with:
