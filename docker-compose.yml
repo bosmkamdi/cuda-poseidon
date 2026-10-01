@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  cuda-poseidon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - poseidon-data:/data
+
+  cuda-poseidon-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    command: /src/test_poseidon
+
+  cuda-poseidon-python:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: python
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    command: python3 /opt/poseidon/poseidon_py.py
+
+volumes:
+  poseidon-data:

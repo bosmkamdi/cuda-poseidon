@@ -1,0 +1,57 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install MkDocs and plugins
+        run: |
+          pip install --upgrade pip
+          pip install \
+            mkdocs-material \
+            mkdocs-minify-plugin \
+            mkdocs-git-revision-date-localized-plugin \
+            pymdown-extensions \
+            mkdocs-material-extensions
+
+      - name: Build documentation
+        run: |
+          mkdir -p docs/assets
+          mkdocs build --strict --verbose
+          ls -la site/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

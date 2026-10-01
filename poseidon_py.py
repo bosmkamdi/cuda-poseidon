@@ -79,6 +79,14 @@ _lib.poseidon_get_device.argtypes = [
     ctypes.POINTER(ctypes.c_int),
 ]
 
+# const char* poseidon_get_field_name(void)
+_lib.poseidon_get_field_name.restype = ctypes.c_char_p
+_lib.poseidon_get_field_name.argtypes = []
+
+# int poseidon_get_default_rounds(void)
+_lib.poseidon_get_default_rounds.restype = ctypes.c_int
+_lib.poseidon_get_default_rounds.argtypes = []
+
 # Module-level init flag
 _initialized = False
 
@@ -98,6 +106,16 @@ def get_device_info():
     vram = ctypes.c_int(0)
     _lib.poseidon_get_device(name_buf, 256, ctypes.byref(vram))
     return (name_buf.value.decode('utf-8'), vram.value)
+
+
+def get_field_name():
+    """Returns the field name compiled into this library (e.g. 'BN254', 'BLS12-381')."""
+    return _lib.poseidon_get_field_name().decode('utf-8')
+
+
+def get_default_rounds():
+    """Returns the default round count compiled into this library."""
+    return _lib.poseidon_get_default_rounds()
 
 
 def gpu_poseidon_hash(pairs, rounds=8):
@@ -184,7 +202,10 @@ if __name__ == '__main__':
     import time
     import random
 
+    field = get_field_name()
+    rounds = get_default_rounds()
     name, vram = get_device_info()
+    print(f"Field: {field} (rounds={rounds})")
     print(f"Device: {name}, VRAM: {vram} MB")
 
     # Benchmark

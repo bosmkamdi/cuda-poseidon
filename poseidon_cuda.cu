@@ -1,8 +1,18 @@
 // CUDA-Accelerated Poseidon Hash Library for ZK Applications
 // Compatible with: circom/snarkjs Poseidon, Merkle tree construction
 // Target: NVIDIA GPU with Compute Capability >= 7.0
+//
+// Multi-curve support: select field at compile time
+//   Default: BN254
+//   -DPOSEIDON_FIELD_BN254       BN254 (alt_bn128) curve
+//   -DPOSEIDON_FIELD_BLS12_381   BLS12-381 scalar field
+//   -DPOSEIDON_FIELD_VESTA       Vesta curve (ZCash Halo2)
+//   -DPOSEIDON_FIELD_PALLAS      Pallas curve (ZCash Orchard)
+//
+// Define POSEIDON_ROUNDS to override the default round count (8).
 
 #include "poseidon_cuda.h"
+#include "poseidon_fields.h"
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,8 +21,8 @@
 typedef unsigned long long u64;
 typedef unsigned int u32;
 
-// Using bn254_prime - 1 (common in ZK circuits)
-#define PRIME32 0xFFFFFFFBU
+// Field prime from poseidon_fields.h (set at compile time)
+#define PRIME32 POSEIDON_FIELD_PRIME
 
 __device__ __forceinline__ u32 mod_mul(u32 a, u32 b) {
     return (u32)(((u64)a * b) % PRIME32);
@@ -35,14 +45,14 @@ __device__ __forceinline__ u32 mod_pow7(u32 x) {
     return mod_mul(x6, x);
 }
 
-// Poseidon round constants (8 rounds for 2-to-1)
+// Round constants — defined in poseidon_fields.h per selected field
 __constant__ u32 POSEIDON_RC[8];
 
 __global__ void poseidon_hash_kernel(
-    const u32* input,
-    u32* output,
-    int N,
-    int rounds
+    const u32*    input,
+    u32*          output,
+    int           N,
+    int           rounds
 ) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid >= N) return;
@@ -55,20 +65,20 @@ __global__ void poseidon_hash_kernel(
         s0 = mod_pow7(s0);
         s1 = mod_pow7(s1);
 
-        // Linear layer + RC
+        // Linear layer + round constant
         u32 tmp = s0;
         s0 = mod_add(mod_add(s0, s1), POSEIDON_RC[r % 8]);
         s1 = mod_add(tmp, s1);
     }
 
-    output[tid * 2] = s0;
+    output[tid * 2]     = s0;
     output[tid * 2 + 1] = s1;
 }
 
-// Global device buffers (allocated once)
-static u32* d_buf_a = NULL;
-static u32* d_buf_b = NULL;
-static int   d_buf_cap = 0;  // capacity in pairs
+// ── Global device buffers (allocated once) ──────────────────
+static u32* d_buf_a    = NULL;
+static u32* d_buf_b    = NULL;
+static int   d_buf_cap = 0;   // capacity in pairs
 static int   initialized = 0;
 
 int poseidon_init(void) {
@@ -82,17 +92,11 @@ int poseidon_init(void) {
         return -1;
     }
 
-    // Load round constants
+    // Load round constant for the selected field
     u32 h_rc[8];
-    // These are standard Poseidon round constants for the bn254 prime
-    h_rc[0] = 0x43e1f593U % PRIME32;
-    h_rc[1] = 0x2833e848U % PRIME32;
-    h_rc[2] = 0xb85045b6U % PRIME32;
-    h_rc[3] = 0x30644e72U % PRIME32;
-    h_rc[4] = 0x0c4cd6c5U % PRIME32;
-    h_rc[5] = 0x1cdfd027U % PRIME32;
-    h_rc[6] = 0x2090bbffU % PRIME32;
-    h_rc[7] = 0x3a43df9dU % PRIME32;
+    u32 rc_data[8] = POSEIDON_RC;
+    for (int i = 0; i < 8; i++)
+        h_rc[i] = rc_data[i] % PRIME32;
 
     err = cudaMemcpyToSymbol(POSEIDON_RC, h_rc, 8 * sizeof(u32));
     if (err != cudaSuccess) {
@@ -108,7 +112,7 @@ int poseidon_init(void) {
 void poseidon_cleanup(void) {
     if (d_buf_a) { cudaFree(d_buf_a); d_buf_a = NULL; }
     if (d_buf_b) { cudaFree(d_buf_b); d_buf_b = NULL; }
-    d_buf_cap = 0;
+    d_buf_cap  = 0;
     initialized = 0;
 }
 
@@ -132,15 +136,15 @@ static int ensure_capacity(int pairs) {
 
 int poseidon_hash_batch(
     const uint32_t* input,
-    uint32_t* output,
-    int N,
-    int rounds
+    uint32_t*       output,
+    int             N,
+    int             rounds
 ) {
     if (!initialized) {
         if (poseidon_init() != 0) return -1;
     }
 
-    size_t in_sz = (size_t)N * 2 * sizeof(u32);
+    size_t in_sz  = (size_t)N * 2 * sizeof(u32);
     size_t out_sz = (size_t)N * 2 * sizeof(u32);
 
     u32 *d_in, *d_out;
@@ -152,7 +156,7 @@ int poseidon_hash_batch(
     cudaMemcpy(d_in, input, in_sz, cudaMemcpyHostToDevice);
 
     int threads = 256;
-    int blocks = (N + threads - 1) / threads;
+    int blocks  = (N + threads - 1) / threads;
     poseidon_hash_kernel<<<blocks, threads>>>(d_in, d_out, N, rounds);
 
     cudaMemcpy(output, d_out, out_sz, cudaMemcpyDeviceToHost);
@@ -166,8 +170,8 @@ int poseidon_hash_batch(
 
 int merkle_build_gpu(
     const uint32_t* leaves,
-    int N,
-    uint32_t* root_out
+    int             N,
+    uint32_t*       root_out
 ) {
     if (!initialized) {
         if (poseidon_init() != 0) return -1;
@@ -185,16 +189,16 @@ int merkle_build_gpu(
     size_t level_sz = (size_t)N * 2 * sizeof(u32);
     cudaMemcpy(d_buf_a, leaves, level_sz, cudaMemcpyHostToDevice);
 
-    u32* src = d_buf_a;
-    u32* dst = d_buf_b;
-    int pairs = N;
+    u32* src   = d_buf_a;
+    u32* dst   = d_buf_b;
+    int  pairs = N;
 
     int threads = 256;
 
     while (pairs > 1) {
         int blocks = (pairs + threads - 1) / threads;
-        // Hash pairs: each pair (2 elements) -> 2 elements digest
-        poseidon_hash_kernel<<<blocks, threads>>>(src, dst, pairs, 8);
+        // Hash pairs: each pair (2 elements) → 2 element digest
+        poseidon_hash_kernel<<<blocks, threads>>>(src, dst, pairs, POSEIDON_ROUNDS);
 
         // Swap
         u32* tmp = src;
@@ -224,4 +228,12 @@ void poseidon_get_device(char* name_out, int name_len, int* vram_mb_out) {
         name_out[name_len - 1] = '\0';
         if (vram_mb_out) *vram_mb_out = 0;
     }
+}
+
+const char* poseidon_get_field_name(void) {
+    return POSEIDON_FIELD_NAME;
+}
+
+int poseidon_get_default_rounds(void) {
+    return POSEIDON_ROUNDS;
 }

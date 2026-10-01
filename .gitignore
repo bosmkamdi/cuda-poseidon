@@ -4,6 +4,7 @@
 *.exe
 *.dll
 *.so
+*.dylib
 *.lib
 *.exp
 *.pdb
@@ -34,6 +35,17 @@ __pycache__/
 dist/
 build/
 
+# MkDocs build output
+site/
+
 # Test outputs
 test_output/
 *.log
+
+# Benchmark results
+benchmark_results.*
+bench/bench_results.*
+
+# Docs assets generated
+docs/assets/favicon.png
+docs/overrides/.gitkeep

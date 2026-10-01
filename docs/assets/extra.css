@@ -1,0 +1,30 @@
+/* Custom styles for cuda-poseidon docs */
+:root {
+  --md-primary-fg-color: #7c4dff;
+  --md-primary-fg-color--light: #b388ff;
+  --md-primary-fg-color--dark: #651fff;
+  --md-accent-fg-color: #ffc107;
+}
+
+.md-header {
+  background: linear-gradient(135deg, #651fff 0%, #7c4dff 100%);
+}
+
+.md-typeset h1 {
+  font-weight: 700;
+  color: var(--md-primary-fg-color--dark);
+}
+
+.md-typeset code {
+  background-color: rgba(124, 77, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+
+.md-typeset pre {
+  border-radius: 8px;
+}
+
+.md-typeset .admonition {
+  border-radius: 8px;
+}

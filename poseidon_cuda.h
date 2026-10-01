@@ -17,36 +17,68 @@
 extern "C" {
 #endif
 
-// Initialize CUDA context and load constants. Returns 0 on success.
+// ── Library Info ─────────────────────────────────────────────
+
+/// Returns the name of the field prime compiled into this library.
+/// E.g. "BN254", "BLS12-381", "Vesta", "Pallas".
+POSEIDON_API const char* poseidon_get_field_name(void);
+
+/// Returns the default round count compiled into this library.
+POSEIDON_API int poseidon_get_default_rounds(void);
+
+// ── Lifecycle ────────────────────────────────────────────────
+
+/// Initialize CUDA context and load round constants.
+/// Returns 0 on success, non-zero on failure.
 POSEIDON_API int poseidon_init(void);
 
-// Cleanup CUDA resources.
+/// Release all GPU resources.
 POSEIDON_API void poseidon_cleanup(void);
 
-// Batch Poseidon hash on GPU.
-// Input:  N * 2 uint32 values (pairs of field elements)
-// Output: N * 2 uint32 values (digests)
-// Returns 0 on success.
+// ── Hash Operations ──────────────────────────────────────────
+
+/// Batch Poseidon hash on GPU.
+///
+/// @param input  N * 2 uint32 values (pairs of field elements: a0,b0,a1,b1,...)
+/// @param output N * 2 uint32 values (digests: digest_a0,digest_b0,...)
+/// @param N      Number of pairs to hash
+/// @param rounds Number of Poseidon rounds
+///
+/// @return 0 on success, negative on failure
 POSEIDON_API int poseidon_hash_batch(
     const uint32_t* input,
-    uint32_t* output,
-    int N,
-    int rounds  // number of rounds, default 8 for 2-to-1 Poseidon
+    uint32_t*       output,
+    int             N,
+    int             rounds
 );
 
-// Build a Merkle tree on GPU using Poseidon as the hash function.
-// N must be power of 2
-// leaves: N pairs of uint32 field elements
-// root_out: 2 uint32 field elements for root
-// Returns 0 on success.
+// ── Merkle Tree ──────────────────────────────────────────────
+
+/// Build a complete Merkle tree on GPU using Poseidon compression.
+///
+/// @param leaves    N * 2 uint32 leaf values
+/// @param N         Number of leaves (MUST be a power of 2)
+/// @param root_out  2 uint32 values for Merkle root
+///
+/// @return 0 on success, negative on failure
 POSEIDON_API int merkle_build_gpu(
     const uint32_t* leaves,
-    int N,
-    uint32_t* root_out
+    int             N,
+    uint32_t*       root_out
 );
 
-// Get GPU device info
-POSEIDON_API void poseidon_get_device(char* name_out, int name_len, int* vram_mb_out);
+// ── Device Info ──────────────────────────────────────────────
+
+/// Query GPU name and VRAM.
+///
+/// @param name_out    Buffer for GPU name (min 16 chars)
+/// @param name_len    Length of name buffer
+/// @param vram_mb_out Pointer to receive VRAM in MB (can be NULL)
+POSEIDON_API void poseidon_get_device(
+    char* name_out,
+    int   name_len,
+    int*  vram_mb_out
+);
 
 #ifdef __cplusplus
 }
